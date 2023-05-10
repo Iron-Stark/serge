@@ -136,6 +136,21 @@ async def delete_chat(chat_id: str):
 
     return True
 
+def generate_detokenized_text(client, prompt, chat):
+    tokenized_prompt = client.tokenize(prompt.encode('utf-8'))
+    tokens_to_take = len(tokenized_prompt) if len(tokenized_prompt)-chat.params.max_tokens < 0  \
+        else 200
+    logger.debug(len(tokenized_prompt))
+    logger.debug(tokens_to_take)
+    tokenized_prompt = tokenized_prompt[-tokens_to_take:]
+    logger.debug(len(tokenized_prompt))
+    detokenized_prompt = [
+        client.detokenize([token]).decode("utf-8", errors="ignore")
+        for token in tokenized_prompt
+    ]
+    detokenized_prompt = ''.join(e for e in detokenized_prompt)
+    logger.debug(detokenized_prompt)
+    return detokenized_prompt
 
 @chat_router.get("/{chat_id}/question")
 def stream_ask_a_question(chat_id: str, prompt: str):
@@ -177,7 +192,8 @@ def stream_ask_a_question(chat_id: str, prompt: str):
         full_answer = ""
         error = None
         try:
-            for output in client(prompt, 
+            detokenized_prompt = generate_detokenized_text(client, prompt, chat)
+            for output in client(detokenized_prompt, 
                     stream=True,
                     temperature=chat.params.temperature,
                     top_p=chat.params.top_p,
@@ -232,7 +248,8 @@ async def ask_a_question(chat_id: str, prompt: str):
                     n_threads=chat.params.n_threads,
                     last_n_tokens_size=chat.params.last_n_tokens_size,
                     )
-        answer = client(prompt, 
+        detokenized_prompt = generate_detokenized_text(client, prompt, chat)
+        answer = client(detokenized_prompt, 
                         temperature=chat.params.temperature,
                         top_p=chat.params.top_p,
                         top_k=chat.params.top_k,
